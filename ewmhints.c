@@ -25,6 +25,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/keysym.h>
 #include "rdesktop.h"
 
 #define _NET_WM_STATE_REMOVE        0	/* remove/unset property */
@@ -173,6 +174,60 @@ get_current_workarea(uint32 * x, uint32 * y, uint32 * width, uint32 * height)
 }
 
 
+
+/*
+  Switch the current workspace in the direction of keysym (XK_Left/Right/Up/Down).
+  Reads _NET_CURRENT_DESKTOP, _NET_NUMBER_OF_DESKTOPS, and _NET_DESKTOP_LAYOUT,
+  then sends a _NET_CURRENT_DESKTOP ClientMessage to the root window.
+*/
+void
+ewmh_switch_workspace(uint32 keysym)
+{
+	unsigned long nitems;
+	unsigned char *prop;
+	long current = 0, total = 0;
+	long target;
+	Window root = DefaultRootWindow(g_display);
+
+	if (get_property_value(root, "_NET_CURRENT_DESKTOP", 1, &nitems, &prop, 1) == 0)
+	{
+		current = *(long *) prop;
+		XFree(prop);
+	}
+
+	if (get_property_value(root, "_NET_NUMBER_OF_DESKTOPS", 1, &nitems, &prop, 1) == 0)
+	{
+		total = *(long *) prop;
+		XFree(prop);
+	}
+
+	if (total <= 0)
+		return;
+
+	switch (keysym)
+	{
+		case XK_Left:
+			target = (current > 0) ? current - 1 : total - 1;
+			break;
+		case XK_Right:
+			target = (current + 1 < total) ? current + 1 : 0;
+			break;
+		default:
+			return;
+	}
+
+	XEvent ev;
+	memset(&ev, 0, sizeof(ev));
+	ev.xclient.type = ClientMessage;
+	ev.xclient.window = root;
+	ev.xclient.message_type = XInternAtom(g_display, "_NET_CURRENT_DESKTOP", False);
+	ev.xclient.format = 32;
+	ev.xclient.data.l[0] = target;
+	ev.xclient.data.l[1] = CurrentTime;
+	XSendEvent(g_display, root, False,
+		   SubstructureRedirectMask | SubstructureNotifyMask, &ev);
+	XFlush(g_display);
+}
 
 void
 ewmh_init()

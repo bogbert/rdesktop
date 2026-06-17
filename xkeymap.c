@@ -729,6 +729,19 @@ handle_special_keys(uint32 keysym, unsigned int state, uint32 ev_time, RD_BOOL p
 				return True;
 			break;
 
+		case XK_Left:
+		case XK_Right:
+			/* Ctrl+Alt+Left/Right: pass through to WM for workspace switching */
+			if ((get_key_state(state, XK_Alt_L) || get_key_state(state, XK_Alt_R))
+			    && (get_key_state(state, XK_Control_L)
+				|| get_key_state(state, XK_Control_R)))
+			{
+				if (pressed)
+					ewmh_switch_workspace(keysym);
+				return True;
+			}
+			break;
+
 		case XK_Num_Lock:
 			/* Synchronize on key release */
 			if (g_numlock_sync && !pressed)

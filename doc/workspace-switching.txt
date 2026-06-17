@@ -1,0 +1,40 @@
+Ctrl+Alt+Arrow workspace switching passthrough
+===============================================
+
+Problem
+-------
+On Linux desktops using Cinnamon (and other EWMH-compliant window managers),
+Ctrl+Alt+Left and Ctrl+Alt+Right are the default shortcuts for switching
+workspaces. When rdesktop has keyboard focus, it grabs the keyboard via
+XGrabKeyboard, which intercepts these events before the window manager can
+process them. As a result, the shortcuts are sent to the remote RDP session
+instead of switching the local workspace.
+
+Solution
+--------
+In handle_special_keys() (xkeymap.c), Ctrl+Alt+Left and Ctrl+Alt+Right are
+now intercepted and redirected to the local window manager instead of being
+forwarded to the RDP session.
+
+The redirection uses the EWMH _NET_CURRENT_DESKTOP ClientMessage protocol:
+  1. Read _NET_CURRENT_DESKTOP to get the current workspace index.
+  2. Read _NET_NUMBER_OF_DESKTOPS to get the total workspace count.
+  3. Compute the target workspace (with wrap-around: Left from workspace 0
+     goes to the last workspace, Right from the last goes back to 0).
+  4. Send a _NET_CURRENT_DESKTOP ClientMessage to the root window with
+     SubstructureRedirectMask | SubstructureNotifyMask, which the WM picks
+     up and acts on.
+
+_NET_CURRENT_DESKTOP is re-read on every key press rather than cached,
+because the user typically returns to rdesktop's workspace between presses,
+so the property always reflects the actual current position.
+
+Ctrl+Alt+Up and Ctrl+Alt+Down are intentionally not intercepted, as their
+meaning is desktop-specific (e.g. Scale/Expo in Cinnamon) and cannot be
+reliably triggered via EWMH messages.
+
+Files changed
+-------------
+  xkeymap.c     : added XK_Left/XK_Right cases in handle_special_keys()
+  ewmhints.c    : added ewmh_switch_workspace()
+  proto.h       : declared ewmh_switch_workspace()
